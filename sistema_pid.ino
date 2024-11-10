@@ -31,8 +31,8 @@ void setup() {
   pinMode(echoPin, INPUT);        // Echo del HC-SR04
   
   // Medir la altura del sensor al inicio
-  // alturaSensor = medirDistancia();
-  alturaSensor = 11;
+  alturaSensor = medirDistancia();
+  // alturaSensor = 10;
 
   
   lcd.setCursor(0, 0);
@@ -94,7 +94,7 @@ void loop() {
         Serial.println("Llenando...");
         lcd.setCursor(0, 1);
         lcd.print("Llenando...     ");
-        delay(500); // La bomba se mantiene encendida por 0.5 segundos
+        delay(1000); // La bomba se mantiene encendida por 0.5 segundos
         digitalWrite(bombaPin1, LOW);   // Apaga la bomba de llenado
 
       } else if (error < 0) { // Se necesita drenar
@@ -130,25 +130,24 @@ void loop() {
 }
 
 double medirDistancia() {
-  long totalDistancia = 0;
-  for (int i = 0; i < 50; i++) {
-    digitalWrite(triggerPin, LOW);
-    delayMicroseconds(2);
-    digitalWrite(triggerPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(triggerPin, LOW);
+    long totalDistancia = 0;
+    const int numLecturas = 50; // Cambia a un número menor si es necesario
+    for (int i = 0; i < numLecturas; i++) {
+        digitalWrite(triggerPin, LOW);
+        delayMicroseconds(2);
+        digitalWrite(triggerPin, HIGH);
+        delayMicroseconds(10);
+        digitalWrite(triggerPin, LOW);
 
-    long duracion = pulseIn(echoPin, HIGH);
-    totalDistancia += duracion * 0.0343 / 2;  // Calcula la distancia en cm
-    delay(50);  // Pequeña espera entre lecturas
-  }
+        long duracion = pulseIn(echoPin, HIGH);
+        long distancia = duracion * 0.0343 / 2;  // Calcula la distancia en cm
+        totalDistancia += distancia;
+        delay(50);  // Pequeña espera entre lecturas
+    }
 
-  double promedioDistancia = totalDistancia / 50.0;
-  
-  Serial.print("Promedio: ");
-  Serial.println(promedioDistancia);  // Muestra el promedio en el serial
-
-  return promedioDistancia;
+    double promedioDistancia = totalDistancia / (double)numLecturas;
+    Serial.println(promedioDistancia);
+    return promedioDistancia;
 }
 double calcularPID(double error) {
   unsigned long now = millis();
