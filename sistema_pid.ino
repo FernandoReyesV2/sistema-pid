@@ -7,9 +7,18 @@ const int potPin = A0;            // Potenciómetro para selección de nivel
 const int botonPin = 2;           // Botón para confirmar inicio
 const int triggerPin = 3;         // Trigger del HC-SR04
 const int echoPin = 4;            // Echo del HC-SR04
-double alturaSensor;               // Altura del sensor desde el fondo (variable)
+double alturaSensor;              // Altura del sensor desde el fondo (variable)
+const int numLecturas = 10; // Número de lecturas a promediar
+const float velocidadSonido = 0.0343; // Velocidad del sonido en cm/μs
+
 
 LiquidCrystal_I2C lcd(0x27, 16, 2); // Pantalla LCD
+
+// Parámetros PID
+double Kp = 1.0, Ki = 0.5, Kd = 0.1; // Coeficientes PID
+double errorSum = 0;                 // Acumulador de error para la integral
+double lastError = 0;                // Error anterior para la derivada
+unsigned long lastTime = 0;          // Último tiempo de cálculo PID
 
 void setup() {
   Serial.begin(9600);
@@ -22,7 +31,9 @@ void setup() {
   pinMode(echoPin, INPUT);        // Echo del HC-SR04
   
   // Medir la altura del sensor al inicio
-  alturaSensor = medirDistancia();
+  // alturaSensor = medirDistancia();
+  alturaSensor = 11;
+
   
   lcd.setCursor(0, 0);
   lcd.print("Sistema listo");     // Mensaje de inicio
@@ -32,7 +43,6 @@ void setup() {
 }
 
 void loop() {
-  // Muestra el nivel de agua actual antes de iniciar el proceso
   double nivelAguaActual = alturaSensor - medirDistancia();
   Serial.print("Nivel de agua actual: ");
   Serial.print(nivelAguaActual);
@@ -42,11 +52,9 @@ void loop() {
   lcd.print(nivelAguaActual);
   lcd.print("cm   ");
 
-  // Lee el nivel de llenado deseado a partir del potenciómetro (1-10)
   int valorPot = analogRead(potPin);
-  double setPoint = map(valorPot, 0, 1023, 1, 10);  // Convertido a centímetros
+  double setPoint = map(valorPot, 0, 1023, 0, 10);  // Convertido a centímetros
   
-  // Muestra el nivel de llenado seleccionado
   Serial.print("Nivel seleccionado: ");
   Serial.print(setPoint);
   Serial.println(" cm");
@@ -55,7 +63,6 @@ void loop() {
   lcd.print(setPoint);
   lcd.print("cm   ");
 
-  // Lee el estado del botón
   int estadoBoton = digitalRead(botonPin);
 
   if (estadoBoton == LOW) {  // Si el botón está presionado
@@ -63,36 +70,42 @@ void loop() {
     lcd.setCursor(0, 1);
     lcd.print("Control iniciado ");
 
-    // Inicia el control de nivel en el tanque
     while (true) {
-      // Mide el nivel de agua en el tanque y ajusta según la altura del sensor
       double distanciaMedida = medirDistancia();
-      double nivelAgua = alturaSensor - distanciaMedida; // Nivel de agua en el recipiente
+      double nivelAgua = alturaSensor - distanciaMedida;
       double error = setPoint - nivelAgua;
+      double output = calcularPID(error);
 
-      // Imprime en la consola y la LCD el nivel actual
       Serial.print("Nivel actual: ");
       Serial.print(nivelAgua);
       Serial.print(" cm, Error: ");
-      Serial.println(error);
+      Serial.print(error);
+      Serial.print(", Salida PID: ");
+      Serial.println(output);
+
       lcd.setCursor(0, 0);
       lcd.print("Actual: ");
       lcd.print(nivelAgua);
       lcd.print("cm  ");
 
-      // Control de bombas según el nivel de error
       if (error > 0) { // Se necesita llenar
         digitalWrite(bombaPin1, HIGH);  // Activa la bomba de llenado
         digitalWrite(bombaPin2, LOW);   // Asegura que la bomba de drenaje esté apagada
         Serial.println("Llenando...");
         lcd.setCursor(0, 1);
         lcd.print("Llenando...     ");
+        delay(500); // La bomba se mantiene encendida por 0.5 segundos
+        digitalWrite(bombaPin1, LOW);   // Apaga la bomba de llenado
+
       } else if (error < 0) { // Se necesita drenar
         digitalWrite(bombaPin1, LOW);   // Asegura que la bomba de llenado esté apagada
         digitalWrite(bombaPin2, HIGH);  // Activa la bomba de drenaje
         Serial.println("Drenando...");
         lcd.setCursor(0, 1);
         lcd.print("Drenando...     ");
+        delay(500); // La bomba de drenaje se mantiene encendida por 0.5 segundos
+        digitalWrite(bombaPin2, LOW);   // Apaga la bomba de drenaje
+
       } else { // Nivel correcto
         digitalWrite(bombaPin1, LOW);
         digitalWrite(bombaPin2, LOW);
@@ -103,24 +116,22 @@ void loop() {
         break;       // Sal del bucle al alcanzar el nivel deseado
       }
 
-      delay(500); // Pausa para estabilizar el sistema
+      delay(3000); // Espera 2 segundos para estabilizar la medición
     }
 
-    // Mensaje final cuando el proceso termina
     Serial.println("Proceso finalizado.");
     lcd.setCursor(0, 1);
     lcd.print("Proceso finalizado");
-    delay(3000);  // Pausa antes de limpiar la pantalla
+    delay(3000);
     lcd.clear();
   }
 
   delay(1000); // Actualización cada segundo antes de presionar el botón
 }
 
-// Función para medir distancia con el sensor HC-SR04
 double medirDistancia() {
   long totalDistancia = 0;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 50; i++) {
     digitalWrite(triggerPin, LOW);
     delayMicroseconds(2);
     digitalWrite(triggerPin, HIGH);
@@ -132,12 +143,24 @@ double medirDistancia() {
     delay(50);  // Pequeña espera entre lecturas
   }
 
-  double promedioDistancia = totalDistancia / 5.0;
+  double promedioDistancia = totalDistancia / 50.0;
   
   Serial.print("Promedio: ");
   Serial.println(promedioDistancia);  // Muestra el promedio en el serial
 
   return promedioDistancia;
 }
+double calcularPID(double error) {
+  unsigned long now = millis();
+  double timeChange = (double)(now - lastTime) / 1000.0;
 
+  errorSum += error * timeChange;
+  double dError = (error - lastError) / timeChange;
 
+  double output = Kp * error + Ki * errorSum + Kd * dError;
+
+  lastError = error;
+  lastTime = now;
+
+  return output;
+}
