@@ -117,10 +117,9 @@ void loop() {
   delay(1000); // Actualización cada segundo antes de presionar el botón
 }
 
-// Función para medir distancia con el sensor HC-SR04 (promediado)
-// Función para medir distancia con un filtro de mediana
+// Función para medir distancia con el sensor HC-SR04
 double medirDistancia() {
-  long distancias[5];
+  long totalDistancia = 0;
   for (int i = 0; i < 5; i++) {
     digitalWrite(triggerPin, LOW);
     delayMicroseconds(2);
@@ -129,27 +128,16 @@ double medirDistancia() {
     digitalWrite(triggerPin, LOW);
 
     long duracion = pulseIn(echoPin, HIGH);
-    distancias[i] = duracion * 0.0343 / 2;  // Calcula la distancia en cm
+    totalDistancia += duracion * 0.0343 / 2;  // Calcula la distancia en cm
     delay(50);  // Pequeña espera entre lecturas
   }
 
-  // Ordena las distancias y selecciona la mediana
-  for (int i = 0; i < 4; i++) {
-    for (int j = i + 1; j < 5; j++) {
-      if (distancias[i] > distancias[j]) {
-        long temp = distancias[i];
-        distancias[i] = distancias[j];
-        distancias[j] = temp;
-      }
-    }
-  }
+  double promedioDistancia = totalDistancia / 5.0;
+  
+  Serial.print("Promedio: ");
+  Serial.println(promedioDistancia);  // Muestra el promedio en el serial
 
-  // La mediana está en la posición central del array ordenado
-  double distanciaMediana = distancias[2];
-
-  Serial.print("Mediana: ");
-  Serial.println(distanciaMediana);  // Muestra la mediana en el serial
-
-  return distanciaMediana;
+  return promedioDistancia;
 }
+
 
