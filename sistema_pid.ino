@@ -27,7 +27,7 @@ void setup() {
   pinMode(echoPin, INPUT);        // Echo del HC-SR04
   
   // Medir la altura del sensor al inicio
-  alturaSensor = medirDistancia();
+  // alturaSensor = medirDistancia();
   alturaSensor = 10;
   
   lcd.setCursor(0, 0);
@@ -89,7 +89,7 @@ void loop() {
         Serial.println("Llenando...");
         lcd.setCursor(0, 1);
         lcd.print("Llenando...     ");
-        delay(1000); // La bomba se mantiene encendida por 0.5 segundos
+        delay(500); // La bomba se mantiene encendida por 0.5 segundos
         digitalWrite(bombaPin1, LOW);   // Apaga la bomba de llenado
 
       } else if (error < 0) { // Se necesita drenar
@@ -98,7 +98,7 @@ void loop() {
         Serial.println("Drenando...");
         lcd.setCursor(0, 1);
         lcd.print("Drenando...     ");
-        delay(1000); // La bomba de drenaje se mantiene encendida por 0.5 segundos
+        delay(500); // La bomba de drenaje se mantiene encendida por 0.5 segundos
         digitalWrite(bombaPin2, LOW);   // Apaga la bomba de drenaje
 
       } else { // Nivel correcto
@@ -124,41 +124,23 @@ void loop() {
   delay(1000); // Actualización cada segundo antes de presionar el botón
 }
 
-// Función para medir distancia con el sensor HC-SR04 (promediado)
-// Función para medir distancia con un filtro de mediana
+// Función para medir distancia con el sensor HC-SR04
 double medirDistancia() {
-  long distancias[5];
-  for (int i = 0; i < 5; i++) {
-    digitalWrite(triggerPin, LOW);
-    delayMicroseconds(2);
-    digitalWrite(triggerPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(triggerPin, LOW);
+  digitalWrite(triggerPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(triggerPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(triggerPin, LOW);
 
-    long duracion = pulseIn(echoPin, HIGH);
-    distancias[i] = duracion * 0.0343 / 2;  // Calcula la distancia en cm
-    delay(50);  // Pequeña espera entre lecturas
-  }
+  long duracion = pulseIn(echoPin, HIGH);
+  double distancia = duracion * 0.0343 / 2;  // Calcula la distancia en cm
 
-  // Ordena las distancias y selecciona la mediana
-  for (int i = 0; i < 4; i++) {
-    for (int j = i + 1; j < 5; j++) {
-      if (distancias[i] > distancias[j]) {
-        long temp = distancias[i];
-        distancias[i] = distancias[j];
-        distancias[j] = temp;
-      }
-    }
-  }
+  Serial.print("Distancia medida: ");
+  Serial.println(distancia);  // Muestra la distancia en el serial
 
-  // La mediana está en la posición central del array ordenado
-  double distanciaMediana = distancias[2];
-
-  Serial.print("Mediana: ");
-  Serial.println(distanciaMediana);  // Muestra la mediana en el serial
-
-  return distanciaMediana;
+  return distancia;
 }
+
 double calcularPID(double error) {
   unsigned long now = millis();
   double timeChange = (double)(now - lastTime) / 1000.0;
